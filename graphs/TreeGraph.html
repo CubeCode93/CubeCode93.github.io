@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<head>
+      <title>Tree Graph</title>
+<style>
+
+.node circle {
+  fill: #fff;
+  stroke: steelblue;
+  stroke-width: 3px;
+}
+
+.node text {
+  font: 12px sans-serif;
+}
+
+.link {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 2px;
+}
+
+</style>
+
+<body>
+
+<!-- load the d3.js library -->	
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<button id="bt1">File Path</button>
+<button id="bt2">Audit Events</button>
+<script>
+
+// Set the dimensions and margins of the diagram
+var margin = {top: 20, right: 90, bottom: 30, left: 90},
+    width = 1250 - margin.left - margin.right,
+    height = 1850 - margin.top - margin.bottom;
+
+// moves the 'group' element to the top left margin
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.right + margin.left)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate("
+          + margin.left + "," + margin.top + ")");
+
+var i = 0,
+    duration = 750,
+    root;
+
+// declares a tree layout and assigns the size
+var treemap = d3.tree().size([height, width]);
+
+
+
+var dataset= []
+var dataset_2= []
+var l2data =[]
+var l2data_2 =[]
+
+d3.json("https://raw.githubusercontent.com/CubeCode93/Dataviz_fall2019/master/cadets-benign-20180319195712.json", function(error, dataread) {
+if (error) throw error;
+
+		var Exec = d3.nest()
+			.key(function(d) { return d.exec; })
+			.rollup(function(v) { return v.length; })
+			.entries(dataread);
+		
+		var Exec_clean = Exec.filter(function (d) {
+				return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+			});
+		
+		var x = 0,y=0;
+		for (var i=0;i<Exec_clean.length;i++){
+			
+			for (var n=0; n<dataread.length;n++){			
+
+				if (dataread[n].exec == Exec_clean[i].key){
+					l2data.push( {id: dataread[n].fdpath })
+					l2data_2.push( {id: dataread[n].event })
+				}	
+			}
+			var path = d3.nest()
+			.key(function(d) { return d.id; })
+			.rollup(function(v) { return v.length; })
+			.entries(l2data);
+			
+			var a_events = d3.nest()
+			.key(function(d) { return d.id; })
+			.rollup(function(v) { return v.length; })
+			.entries(l2data_2);
+			
+			var path_clean = path.filter(function (d) {
+				return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+			});
+			
+			var event_clean = a_events.filter(function (d) {
+				return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+			});
+			
+			for (var j=0; j<path_clean.length;j++){
+				dataset[x] = [Exec_clean[i].key+","+path_clean[j].key,path_clean[j].value]
+				x++;
+			}
+			
+			for (var k=0; k<event_clean.length;k++){
+				dataset_2[y] = [Exec_clean[i].key+","+event_clean[k].key,event_clean[k].value]
+				y++
+			}
+				
+		}
+
+		
+		var treeData = buildHierarchy(dataset,"Host1")
+		var treeData_2 = buildHierarchy(dataset_2,"Host1")
+		console.log(dataset)
+		console.log(treeData)
+		
+		
+		// Assigns parent, children, height, depth
+		root = d3.hierarchy(treeData, function(d) { return d.children; });
+		root.x0 = height / 2;
+		root.y0 = 0;
+
+		// Collapse after the second level
+		root.children.forEach(collapse);
+		
+		
+		update(root);
+		
+		d3.select("#bt1").on("click", () => {
+		
+			root = d3.hierarchy(treeData, function(d) { return d.children; });
+			root.x0 = height / 2;
+			root.y0 = 0;
+		
+			root.children.forEach(collapse);
+		
+			update(root);
+		});
+		
+		
+		d3.select("#bt2").on("click", () => {
+			
+			root = d3.hierarchy(treeData_2, function(d) { return d.children; });
+			root.x0 = height / 2;
+			root.y0 = 0;
+			
+			root.children.forEach(collapse);
+			
+			update(root);
+		
+		});
+		
+		svg.append('text')
+				.attr('class', 'source')
+				.attr('x',width - 1150)
+				.attr('y',height + 30 ) 
+				.attr('text-anchor', 'start')
+				.text('Time Frame:'+timeFrame(dataread,0)+" - "+timeFrame(dataread,dataread.length-1))
+
+});
+
+// Collapse the node and all it's children
+		function collapse(d) {
+			if(d.children) {
+				d._children = d.children
+				d._children.forEach(collapse)
+				d.children = null
+			}
+		}
+
+function update(source) {
+
+  // Assigns the x and y position for the nodes
+  var treeData = treemap(root);
+
+  // Compute the new tree layout.
+  var nodes = treeData.descendants(),
+      links = treeData.descendants().slice(1);
+
+  // Normalize for fixed-depth.
+  nodes.forEach(function(d){ d.y = d.depth * 180});
+
+  // ****************** Nodes section ***************************
+
+  // Update the nodes...
+  var node = svg.selectAll('g.node')
+      .data(nodes, function(d) {return d.id || (d.id = ++i); });
+
+  // Enter any new modes at the parent's previous position.
+  var nodeEnter = node.enter().append('g')
+      .attr('class', 'node')
+      .attr("transform", function(d) {
+        return "translate(" + source.y0 + "," + source.x0 + ")";
+    })
+    .on('click', click);
+
+  // Add Circle for the nodes
+  nodeEnter.append('circle')
+      .attr('class', 'node')
+      .attr('r', 1e-6)
+      .style("fill", function(d) {
+          return d._children ? "lightsteelblue" : "#fff";
+      });
+
+  // Add labels for the nodes
+  nodeEnter.append('text')
+      .attr("dy", ".35em")
+      .attr("x", function(d) {
+          return d.children || d._children ? -13 : 13;
+      })
+      .attr("text-anchor", function(d) {
+          return d.children || d._children ? "end" : "start";
+      })
+      .text(function(d) { return d.data.name; });
+
+  // UPDATE
+  var nodeUpdate = nodeEnter.merge(node);
+
+  // Transition to the proper position for the node
+  nodeUpdate.transition()
+    .duration(duration)
+    .attr("transform", function(d) { 
+        return "translate(" + d.y + "," + d.x + ")";
+     });
+
+  // Update the node attributes and style
+  nodeUpdate.select('circle.node')
+    .attr('r', 10)
+    .style("fill", function(d) {
+        return d._children ? "lightsteelblue" : "#fff";
+    })
+    .attr('cursor', 'pointer');
+
+
+  // Remove any exiting nodes
+  var nodeExit = node.exit().transition()
+      .duration(duration)
+      .attr("transform", function(d) {
+          return "translate(" + source.y + "," + source.x + ")";
+      })
+      .remove();
+
+  // On exit reduce the node circles size to 0
+  nodeExit.select('circle')
+    .attr('r', 1e-6);
+
+  // On exit reduce the opacity of text labels
+  nodeExit.select('text')
+    .style('fill-opacity', 1e-6);
+
+  // ****************** links section ***************************
+
+  // Update the links...
+  var link = svg.selectAll('path.link')
+      .data(links, function(d) { return d.id; });
+
+  // Enter any new links at the parent's previous position.
+  var linkEnter = link.enter().insert('path', "g")
+      .attr("class", "link")
+      .attr('d', function(d){
+        var o = {x: source.x0, y: source.y0}
+        return diagonal(o, o)
+      });
+
+  // UPDATE
+  var linkUpdate = linkEnter.merge(link);
+
+  // Transition back to the parent element position
+  linkUpdate.transition()
+      .duration(duration)
+      .attr('d', function(d){ return diagonal(d, d.parent) });
+
+  // Remove any exiting links
+  var linkExit = link.exit().transition()
+      .duration(duration)
+      .attr('d', function(d) {
+        var o = {x: source.x, y: source.y}
+        return diagonal(o, o)
+      })
+      .remove();
+
+  // Store the old positions for transition.
+  nodes.forEach(function(d){
+    d.x0 = d.x;
+    d.y0 = d.y;
+  });
+
+  // Creates a curved (diagonal) path from parent to the child nodes
+  function diagonal(s, d) {
+
+    path = `M ${s.y} ${s.x}
+            C ${(s.y + d.y) / 2} ${s.x},
+              ${(s.y + d.y) / 2} ${d.x},
+              ${d.y} ${d.x}`
+
+    return path
+  }
+
+  // Toggle children on click.
+  function click(d) {
+    if (d.children) {
+        d._children = d.children;
+        d.children = null;
+      } else {
+        d.children = d._children;
+        d._children = null;
+      }
+    update(d);
+  }
+}
+
+
+
+function buildHierarchy(rawdata,core) {
+  var root = {"name": core, "children": []};
+  for (var i = 0; i < rawdata.length; i++) {
+    var sequence = rawdata[i][0];
+    var size = +rawdata[i][1];
+
+    if (isNaN(size)) { // e.g. if this is a header row
+      continue;
+    }
+    var parts = sequence.split(",");
+    var currentNode = root;
+    for (var j = 0; j < parts.length; j++) {
+      var children = currentNode["children"];
+      var nodeName = parts[j];
+      var childNode;
+      if (j + 1 < parts.length) {
+   // Not yet at the end of the sequence; move down the tree.
+ 	var foundChild = false;
+ 	for (var k = 0; k < children.length; k++) {
+ 	  if (children[k]["name"] == nodeName) {
+ 	    childNode = children[k];
+ 	    foundChild = true;
+ 	    break;
+ 	  }
+ 	}
+  // If we don't already have a child node for this branch, create it.
+ 	if (!foundChild) {
+ 	  childNode = {"name": nodeName, "children": []};
+ 	  children.push(childNode);
+ 	}
+ 	currentNode = childNode;
+      } else {
+ 	// Reached the end of the sequence; create a leaf node.
+ 	childNode = {"name": nodeName, "size": size};
+ 	children.push(childNode);
+      }
+    }
+  }
+  return root;
+};
+
+function timeFrame(data,n){
+		var timestamp = (data[n].time/1000000000).toFixed(0);
+				var months_arr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+				var date = new Date(timestamp*1000);
+				var year = date.getFullYear();
+				var month = months_arr[date.getMonth()];
+				var day = date.getDate();
+				var hours = date.getHours();
+				var minutes = "0" + date.getMinutes();
+				var seconds = "0" + date.getSeconds();
+				var convdataTime = month+'/'+day+'/'+year+' '+hours + ':' + minutes.substr(-2) + ':' + seconds.substr(-2);
+				return convdataTime;
+	}	
+
+//Source courtesy:https://bl.ocks.org/d3noob/43a860bc0024792f8803bba8ca0d5ecd
+</script>
+</body>

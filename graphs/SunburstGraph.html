@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+    <head>
+      <title>Sun Burst Graph</title>
+		
+	<style>
+		body {
+            font-family: Sans-serif;
+            font-size: 11px;
+        }
+
+        .slice {
+            cursor: pointer;
+        }
+
+        .slice .main-arc {
+            stroke: #fff;
+            stroke-width: 1px;
+        }
+
+        .slice .hidden-arc {
+            fill: none;
+        }
+
+        .slice text {
+            pointer-events: none;
+            dominant-baseline: middle;
+            text-anchor: middle;
+        }
+		
+		#sidebar {
+			float: right;
+			width: 200px;
+		}
+		
+		#legend {
+			padding: 10px 0 0 3px;
+		}
+
+		#legend text {
+			font-weight: 600;
+			fill: #fff;
+		}
+	
+	</style>
+	
+	<svg width="960" height="100"></svg>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+        
+    </head>
+    <body>
+		<div id="sidebar">
+			<input type="checkbox" id="togglelegend"> Legend<br/>
+			<div id="legend" style="visibility: hidden;"></div>
+		</div>
+        <script>
+		
+		const width = window.innerWidth,
+            height = window.innerHeight,
+            maxRadius = (Math.min(width, height) / 2) - 5;
+
+        const formatNumber = d3.format(',d');
+
+        const x = d3.scaleLinear()
+            .range([0, 2 * Math.PI])
+            .clamp(true);
+
+        const y = d3.scaleSqrt()
+            .range([maxRadius*.1, maxRadius]);
+
+        const color = d3.scaleOrdinal(d3.schemeCategory20);
+
+        const partition = d3.partition();
+
+        const arc = d3.arc()
+            .startAngle(d => x(d.x0))
+            .endAngle(d => x(d.x1))
+            .innerRadius(d => Math.max(0, y(d.y0)))
+            .outerRadius(d => Math.max(0, y(d.y1)));
+
+        const middleArcLine = d => {
+            const halfPi = Math.PI/2;
+            const angles = [x(d.x0) - halfPi, x(d.x1) - halfPi];
+            const r = Math.max(0, (y(d.y0) + y(d.y1)) / 2);
+
+            const middleAngle = (angles[1] + angles[0]) / 2;
+            const invertDirection = middleAngle > 0 && middleAngle < Math.PI; // On lower quadrants write text ccw
+            if (invertDirection) { angles.reverse(); }
+
+            const path = d3.path();
+            path.arc(0, 0, r, angles[0], angles[1], invertDirection);
+            return path.toString();
+        };
+
+        const textFits = d => {
+            const CHAR_SPACE = 6;
+
+            const deltaAngle = x(d.x1) - x(d.x0);
+            const r = Math.max(0, (y(d.y0) + y(d.y1)) / 2);
+            const perimeter = r * deltaAngle;
+
+            return d.data.name.length * CHAR_SPACE < perimeter;
+        };
+
+        const svg = d3.select('body').append('svg')
+            .style('width', '100vw')
+            .style('height', '100vh')
+            .attr('viewBox', `${-width / 2} ${-height / 2} ${width} ${height}`)
+            .on('click', () => focusOn()); // Reset zoom on canvas click
+		
+		
+		var legends = {
+			"Layer 1: Host":"#7F8C8D", 
+			"Layer 2: Users":"#707B7C",
+			"Layer 3: Application":"#616A6B", 
+			"Layer 4: Process ID":"#515A5A",
+			"Layer 5: Thread ID":"#424949"
+		};
+		
+		var dataset= []
+
+		d3.json("https://raw.githubusercontent.com/CubeCode93/Dataviz_fall2019/master/cadets-benign-20180319195712.json", function(error, dataread) {
+		if (error) throw error;
+		//console.log(data.host,data.exec,data.ppid)
+		
+		var Core = d3.nest()
+				.key(function(d) { return d.host; })
+				.rollup(function(v) { return v.length; })
+				.entries(dataread);
+		
+		//dataset[0] = Core[0].key
+		
+		var Logins = d3.nest()
+				.key(function(d) { return d.login; })
+				.rollup(function(v) { return v.length; })
+				.entries(dataread);
+			
+		var Logins = Logins.filter(function (d) {
+				return (d.key != "undefined" && d.key!= "");
+			});
+		
+		//console.log(Logins)
+		
+		var x = 0;
+		for (var i=0;i<Logins.length;i++){
+		
+			dataset[x] = [Logins[i].key,1]
+			
+			for (var n=0; n<dataread.length;n++){
+			
+				if (dataread[n].login == Logins[i].key){
+					dataset[x] = [Logins[i].key+"-"+dataread[n].exec+"-"+dataread[n].pid+"-"+dataread[n].tid,1]
+				    x++
+				}						
+			}
+		}
+		
+		var data_obj = buildHierarchy(dataset,"Host1")
+		console.log(dataset)
+		console.log(data_obj)
+		
+		
+            root = d3.hierarchy(data_obj);
+            root.sum(d => d.size);
+
+            const slice = svg.selectAll('g.slice')
+                .data(partition(root).descendants());
+
+            slice.exit().remove();
+
+            const newSlice = slice.enter()
+                .append('g').attr('class', 'slice')
+                .on('click', d => {
+                    d3.event.stopPropagation();
+                    focusOn(d);
+                });
+
+            newSlice.append('title')
+                .text(d => d.data.name + '\n' + formatNumber(d.value));
+
+            newSlice.append('path')
+                .attr('class', 'main-arc')
+                .style('fill', d => color((d.children ? d : d.parent).data.name))
+                .attr('d', arc);
+
+            newSlice.append('path')
+                .attr('class', 'hidden-arc')
+                .attr('id', (_, i) => `hiddenArc${i}`)
+                .attr('d', middleArcLine);
+
+            const text = newSlice.append('text')
+                .attr('display', d => textFits(d) ? null : 'none');
+
+            // Add white contour
+            text.append('textPath')
+                .attr('startOffset','50%')
+                .attr('xlink:href', (_, i) => `#hiddenArc${i}` )
+                .text(d => d.data.name)
+                .style('fill', 'none')
+                .style('stroke', '#fff')
+                .style('stroke-width', 5)
+                .style('stroke-linejoin', 'round');
+
+            text.append('textPath')
+                .attr('startOffset','50%')
+                .attr('xlink:href', (_, i) => `#hiddenArc${i}` )
+                .text(d => d.data.name);
+				
+			svg.append('text')
+				.attr('class', 'source')
+				.attr('x',370)
+				.attr('y',-330)
+				.attr('text-anchor', 'start')
+				.text('Time Frame:'+timeFrame(dataread,0)+" - "+timeFrame(dataread,dataread.length-1))
+		
+			/////////////toggel
+			drawLegend();
+			d3.select("#togglelegend").on("click", toggleLegend);
+			/////////////toggel
+		});
+		
+function buildHierarchy(rawdata,core) {
+  var root = {"name": core, "children": []};
+  for (var i = 0; i < rawdata.length; i++) {
+    var sequence = rawdata[i][0];
+    var size = +rawdata[i][1];
+    if (isNaN(size)) { // e.g. if this is a header row
+      continue;
+    }
+    var parts = sequence.split("-");
+    var currentNode = root;
+    for (var j = 0; j < parts.length; j++) {
+      var children = currentNode["children"];
+      var nodeName = parts[j];
+      var childNode;
+      if (j + 1 < parts.length) {
+   // Not yet at the end of the sequence; move down the tree.
+ 	var foundChild = false;
+ 	for (var k = 0; k < children.length; k++) {
+ 	  if (children[k]["name"] == nodeName) {
+ 	    childNode = children[k];
+ 	    foundChild = true;
+ 	    break;
+ 	  }
+ 	}
+  // If we don't already have a child node for this branch, create it.
+ 	if (!foundChild) {
+ 	  childNode = {"name": nodeName, "children": []};
+ 	  children.push(childNode);
+ 	}
+ 	currentNode = childNode;
+      } else {
+ 	// Reached the end of the sequence; create a leaf node.
+ 	childNode = {"name": nodeName, "size": size};
+ 	children.push(childNode);
+      }
+    }
+  }
+  return root;
+};
+		
+
+function focusOn(d = { x0: 0, x1: 1, y0: 0, y1: 1 }) {
+            // Reset to top-level if no data point specified
+
+            const transition = svg.transition()
+                .duration(750)
+                .tween('scale', () => {
+                    const xd = d3.interpolate(x.domain(), [d.x0, d.x1]),
+                        yd = d3.interpolate(y.domain(), [d.y0, 1]);
+                    return t => { x.domain(xd(t)); y.domain(yd(t)); };
+                });
+
+            transition.selectAll('path.main-arc')
+                .attrTween('d', d => () => arc(d));
+
+            transition.selectAll('path.hidden-arc')
+                .attrTween('d', d => () => middleArcLine(d));
+
+            transition.selectAll('text')
+                .attrTween('display', d => () => textFits(d) ? null : 'none');
+
+            moveStackToFront(d);
+
+            //
+
+            function moveStackToFront(elD) {
+                svg.selectAll('.slice').filter(d => d === elD)
+                    .each(function(d) {
+                        this.parentNode.appendChild(this);
+                        if (d.parent) { moveStackToFront(d.parent); }
+                    })
+            }
+        }
+		
+function timeFrame(data,n){
+		var timestamp = (data[n].time/1000000000).toFixed(0);
+				var months_arr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+				var date = new Date(timestamp*1000);
+				var year = date.getFullYear();
+				var month = months_arr[date.getMonth()];
+				var day = date.getDate();
+				var hours = date.getHours();
+				var minutes = "0" + date.getMinutes();
+				var seconds = "0" + date.getSeconds();
+				var convdataTime = month+'/'+day+'/'+year+' '+hours + ':' + minutes.substr(-2) + ':' + seconds.substr(-2);
+				return convdataTime;
+	}		
+		
+		
+///////////////////toggel
+function drawLegend() {
+
+  // Dimensions of legend item: width, height, spacing, radius of rounded rect.
+  var li = {
+    w: 120, h:20, s: 10, r: 3
+  };
+
+  var legend = d3.select("#legend").append("svg:svg")
+      .attr("width", li.w)
+      .attr("height", d3.keys(legends).length * (li.h + li.s));
+
+  var g = legend.selectAll("g")
+      .data(d3.entries(legends))
+      .enter().append("svg:g")
+      .attr("transform", function(d, i) {
+              return "translate(0," + i * (li.h + li.s) + ")";
+           });
+
+  g.append("svg:rect")
+      .attr("rx", li.r)
+      .attr("ry", li.r)
+      .attr("width", li.w)
+      .attr("height", li.h)
+      .style("fill", function(d) { return d.value; });
+	  
+	  
+  g.append("svg:text")
+      .attr("x", li.w / 2)
+      .attr("y", li.h / 2)
+      .attr("dy", "0.35em")
+      .attr("text-anchor", "middle")
+      .text(function(d) { return d.key; });
+}
+
+
+function toggleLegend() {
+  var legend = d3.select("#legend");
+  if (legend.style("visibility") == "hidden") {
+    legend.style("visibility", "");
+  } else {
+    legend.style("visibility", "hidden");
+  }
+}
+/////////////toggel
+		
+		</script>
+        
+    </body>
+    
+</html
