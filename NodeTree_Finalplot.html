@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+    <head>
+	 
+      <title>Final Plot</title>
+		
+	<style>
+		
+		.node circle {
+			fill: #999;
+		}
+
+		.node text {
+			font: 10px sans-serif;
+		}
+
+		.node--internal circle {
+			fill: #555;
+		}
+
+		.node--internal text {
+			text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+		}
+
+		.link {
+			fill: none;
+			stroke: #555;
+			stroke-opacity: 0.4;
+			stroke-width: 1.5px;
+		}
+
+
+	/* Style the lines by removing the fill and applying a stroke */
+		.line {
+			fill: none;
+			stroke: #ffab00;
+			stroke-width: 2;
+		}
+	
+		.line2 {
+			fill: none;
+			stroke: #0BE8F9;
+			stroke-width: 2;
+		}
+	
+	/* Style the dots by assigning a fill and stroke */
+		.dot {
+			fill: #FB8100 ;
+			stroke: #fff;
+		}
+		.dot2 {
+			fill: #0B79F9 ;
+			stroke: #fff;
+		}
+		
+		.container {
+			float: right;	
+		}
+
+
+	</style>
+        <svg width="1500" height="700">
+		<g id="first" transform="translate(0, 30)">
+            <text>Radial Cluster Dendrogram</text>
+		</g>
+		
+		<g id="second" transform="translate(860, 30)">
+			<text> Time(X) Vs Thread & Application count(Y) </text>
+		</g>
+		
+		</svg>
+		
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<script src="https://d3js.org/d3-timer.v1.min.js"></script>
+	
+	<button id="bt1">PAUSE</button>
+    <button id="bt2">RESUME</button>
+        
+    </head>
+    <body>
+		
+    <script>
+	
+	var svg = d3.select("svg"),
+    margin = {top: 330, right: 10, bottom: 60, left: 400},
+    width = (+svg.attr("width") / 3.25) - margin.left - margin.right,
+    height = (+svg.attr("height") / 1) - margin.top - margin.bottom;
+
+	///////////////////////////////////////////////////////////////////////////////////////container for node chart <c1>
+	var gContainer = svg.append("g")
+          .attr("transform", "translate(0, 30)")
+          .classed("Node-Tree", true);
+
+	var g = gContainer.append("g")
+          .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+	
+	var stratify = d3.stratify()
+		.parentId(function(d) { return d.id.substring(0, d.id.lastIndexOf(".")); });
+
+	var tree = d3.cluster()
+		.size([360, 260]) //change y(390) here for radious  
+		.separation(function(a, b) { return (a.parent == b.parent ? 1 : 2) / a.depth; });
+	////////////////////////////////////////////////////////////////////////////////////////////////////////</c1>
+	
+	///////////////////////////////////////////////////////////<c2>
+	var margin2 = {top: 230, right: 60, bottom: 60, left: 20},
+    width2 = (+svg.attr("width") / 1.75) - margin2.left - margin2.right,
+    height2 = (+svg.attr("height") / 1.5) - margin2.top - margin2.bottom;
+
+	var gContainer2 = svg.append("g")
+          .attr("transform", "translate(860, 30)")
+          .classed("Time-Chart", true);
+
+	var g2 = gContainer2.append("g")
+          .attr("transform", "translate(" + margin2.left + "," + margin2.top + ")");
+
+
+	var div = d3.select("body").append("div")
+				.attr("class", "tooltip")
+				.style("opacity", 0);
+	
+	//////////////////////////////////////////////////////////////<c/2>
+	
+	var index = 0
+	var index_limit = 500
+	
+d3.json("https://raw.githubusercontent.com/CubeCode93/Dataviz_fall2019/master/cadets-20180402220737.json", function(error, data) {
+	if (error) throw error;
+
+	var sliceData = data.slice(index, index+index_limit);
+	
+	datastruct(sliceData) //generates node chart
+	data_preprocess(sliceData) //generates time series plot
+	
+	g2.append('text')
+				.attr('class', 'source')
+				.attr("id", 'timetext')
+				.attr('x',width2 - 650)
+				.attr('y',height2 + 50 ) 
+				.attr('text-anchor', 'start')
+				.text('Time Frame : '+sliceData[0].time+" to "+sliceData[sliceData.length-1].time)
+				
+			g2.append('text')
+				.attr('class', 'legend1')
+				.attr('x',width2 - 450)
+				.attr('y',height2 - 200 ) 
+				.attr('text-anchor', 'start')
+				.style('fill', '#ffab00')
+				.text('Number of Running Applications (Exec) ----')
+				
+			g2.append('text')
+				.attr('class', 'legend2')
+				.attr('x',width2 - 750)
+				.attr('y',height2 - 200 ) 
+				.attr('text-anchor', 'start')
+				.style('fill', '#0BE8F9')
+				.text('Number of Threads ----')
+	
+	var timer = new Timer(function() {
+	
+		index += index_limit;
+		if ((index+index_limit) >data.length-1){index=0;}
+		var sliceData = data.slice(index, index+index_limit);	
+		
+		///////////////////////////////////Clear node chart 
+		d3.selectAll(".link").remove();
+		d3.selectAll(".node").remove();
+		
+		///////////////////////////////////clear time chart
+		d3.selectAll(".dot").remove();
+		d3.selectAll(".dot2").remove();
+		d3.selectAll(".dot3").remove();
+		d3.selectAll("path").remove();
+		d3.selectAll('.axis').remove();
+		d3.select('#timetext').remove();		
+				
+		datastruct(sliceData)		//recall node chart
+        data_preprocess(sliceData)	//recall time chart
+		
+		g2.append('text')
+				.attr('class', 'source')
+				.attr("id", 'timetext')
+				.attr('x',width2 - 650)
+				.attr('y',height2 + 50 ) 
+				.attr('text-anchor', 'start')
+				.text('Time Frame : '+sliceData[0].time+" to "+sliceData[sliceData.length-1].time)
+		
+	}, 4000);
+	
+	d3.select("#bt1").on("click", () => {
+			timer.stop();		//stop the timer to pause the animation
+		
+	});
+	
+	
+	d3.select("#bt2").on("click", () => {
+			timer.start();		//Resume the timer to start the animation
+	});
+  
+});
+
+//////////////////Timer function
+function Timer(fn, t) {
+    var timerObj = setInterval(fn, t);
+
+    this.stop = function() {
+        if (timerObj) {
+            clearInterval(timerObj);
+            timerObj = null;
+        }
+        return this;
+    }
+
+    // start timer using current settings (if it's not already running)
+    this.start = function() {
+        if (!timerObj) {
+            this.stop();
+            timerObj = setInterval(fn, t);
+        }
+        return this;
+    }
+
+    // start with new interval, stop current interval
+    this.reset = function(newT) {
+        t = newT;
+        return this.stop().start();
+    }
+}
+
+////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////node chart functions<Node>
+function datastruct(data){
+
+		var dataset =[]
+		var l2data  = []
+	    var l3data = []
+		
+		dataset.push( {id: "Host 01", value: 0 })
+		
+		var Exec = d3.nest()
+				.key(function(d) { return d.exec; })
+				.rollup(function(v) { return v.length; })
+				.entries(data);
+				
+		var Exec_clean = Exec.filter(function (d) {
+				return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+			});
+		
+		for (var i=0;i<Exec_clean.length;i++){
+			var Layer2 = "Host 01"+"."+(Exec_clean[i].key).replace(/\./g, "_")
+			
+			dataset.push( {id: Layer2})
+			
+			for (var j=0;j<data.length;j++ ){
+				if (data[j].exec == Exec_clean[i].key)
+				{
+					l2data.push( {id: data[j].ppid })
+				}
+			}		
+			var l2group = d3.nest()
+				.key(function(d) { return d.id; })
+				.rollup(function(v) { return v.length; })
+				.entries(l2data);
+				
+			var l2group_clean = l2group.filter(function (d) {
+				return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+			});
+			//console.log(l2group[0].key)
+			for (var y=0;y<l2group_clean.length;y++){
+				var Layer3 = Layer2+".PPID:"+l2group_clean[y].key
+			
+				dataset.push( {id: Layer3 })
+				
+				for (var n=0;n<data.length;n++ ){
+				if ((data[n].exec == Exec_clean[i].key)&(data[n].ppid == l2group_clean[y].key))
+				{
+					l3data.push( {id: data[n].tid })
+					//console.log(l3data)
+				}
+			  }	
+			  var l3group = d3.nest()
+				.key(function(d) { return d.id; })
+				.rollup(function(v) { return v.length; })
+				.entries(l3data);
+				//console.log(l3group)
+			  for (var x=0;x<l3group.length;x++){
+				//console.log(l3group[x].key)
+				var Layer4 = Layer3+".TID:"+l3group[x].key
+				dataset.push({id:Layer4})
+			  }
+			}
+		}
+		
+		plotnode(dataset)
+		//console.log(dataset)
+}
+
+function plotnode(dataobj){
+	var root = tree(stratify(dataobj)
+      .sort(function(a, b) { return (a.height - b.height) || a.id.localeCompare(b.id); }));
+
+  var link = g.selectAll(".link")
+    .data(root.descendants().slice(1))
+    .enter().append("path")
+      .attr("class", "link")
+      .attr("d", function(d) {
+        return "M" + project(d.x, d.y)
+            + "C" + project(d.x, (d.y + d.parent.y) / 2)
+            + " " + project(d.parent.x, (d.y + d.parent.y) / 2)
+            + " " + project(d.parent.x, d.parent.y);
+      });
+
+  var node = g.selectAll(".node")
+    .data(root.descendants())
+    .enter().append("g")
+      .attr("class", function(d) { return "node" + (d.children ? " node--internal" : " node--leaf"); })
+      .attr("transform", function(d) { return "translate(" + project(d.x, d.y) + ")"; });
+
+  node.append("circle")
+      .attr("r", 2.5);
+
+  node.append("text")
+      .attr("dy", ".31em")
+      .attr("x", function(d) { return d.x < 180 === !d.children ? 6 : -6; })
+      .style("text-anchor", function(d) { return d.x < 180 === !d.children ? "start" : "end"; })
+      .attr("transform", function(d) { return "rotate(" + (d.x < 180 ? d.x - 90 : d.x + 90) + ")"; })
+      .text(function(d) { return d.id.substring(d.id.lastIndexOf(".") + 1); });
+}
+
+function project(x, y) {
+  var angle = (x - 90) / 180 * Math.PI, radius = y;
+  return [radius * Math.cos(angle), radius * Math.sin(angle)];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////</Node>
+
+
+
+//////////////////////////////////////////////////////////Time chart functions
+function timestamp(timein){
+			var timestamp = (timein/1000000000).toFixed(0);
+			var months_arr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+			var date = new Date(timestamp*1000);
+			var year = date.getFullYear();
+			var month = months_arr[date.getMonth()];
+			var day = date.getDate();
+			var hours = date.getHours();
+			var minutes = "0" + date.getMinutes();
+			var seconds = "0" + date.getSeconds();
+			var convdataTime = month+'-'+day+'-'+year+' '+hours + ':' + minutes.substr(-2) + ':' + seconds.substr(-2);
+			//return convdataTime;
+			return convdataTime
+		}
+
+
+function data_preprocess(sliceData){
+		//Change to time stamp
+			for (var n=0;n<sliceData.length;n++){
+				sliceData[n].time = timestamp(sliceData[n].time)
+			}
+			
+			//Group Time sets
+			var Time = d3.nest()
+				.key(function(d) { return d.time; })
+				.rollup(function(v) { return v.length; })
+				.entries(sliceData);
+			//console.log(Time)
+			for (var i=0;i<Time.length;i++){	
+				var dataset=[]
+				
+				for (var x=0;x<sliceData.length;x++){
+					if (sliceData[x].time == Time[i].key){
+		
+						dataset.push(sliceData[x].exec)
+					}
+				}	
+				//console.log(dataset)
+				var exec = d3.nest()
+				.key(function(d) { return d; })
+				.rollup(function(v) { return v.length; })
+				.entries(dataset);
+				
+				var exec_clean = exec.filter(function (d) {
+				return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+				});
+				
+				var tid_count=0
+				for (var o=0;o<exec_clean.length;o++){
+					var dataset2=[]
+				  for (var j=0;j<sliceData.length;j++){
+					if (sliceData[j].exec == exec_clean[o].key){
+						dataset2.push(sliceData[j].ppid)
+						}
+					}
+					var ppid = d3.nest()
+						.key(function(d) { return d; })
+						.rollup(function(v) { return v.length; })
+						.entries(dataset2);
+						
+					var ppid_clean = ppid.filter(function (d) {
+						return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+						});
+						//console.log(ppid_clean)
+					for (var a=0;a<ppid_clean.length;a++){
+						var dataset3=[]
+						for (var b=0;b<sliceData.length;b++){
+							if ((sliceData[b].ppid == ppid_clean[a].key)&&(sliceData[b].exec == exec_clean[o].key)){
+								dataset3.push(sliceData[b].tid)
+							}
+						}
+						var tid = d3.nest()
+								.key(function(d) { return d; })
+								.rollup(function(v) { return v.length; })
+								.entries(dataset3);
+								
+							var tid_clean = tid.filter(function (d) {
+								return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+								});
+							
+							tid_count=tid_count+tid_clean.length
+							
+					}
+						
+				}
+				
+				Time[i].count = exec_clean.length
+				Time[i].count2 = tid_count
+
+			}
+			//console.log(Time)
+			InitLineplot(Time);
+}
+
+function InitLineplot(dataset){
+
+var parseTime = d3.timeParse("%b-%d-%Y %H:%M:%S");
+
+var x = d3.scaleTime().range([0, width2]);
+var y = d3.scaleLinear().range([height2, 0]);
+
+var line = d3.line()
+    .x(function(d) { return x(d.key); }) // set the x values for the line generator
+    .y(function(d) { return y(d.count); }) // set the y values for the line generator 
+    .curve(d3.curveMonotoneX) // apply smoothing to the line
+	
+////
+var line2 = d3.line()
+    .x(function(d) { return x(d.key); }) // set the x values for the line generator
+    .y(function(d) { return y(d.count2); }) // set the y values for the line generator 
+    .curve(d3.curveMonotoneX) // apply smoothing to the line	
+	
+/////////	
+
+
+
+dataset.forEach(function(d) {
+			  d.key = parseTime(d.key);
+			  d.count = +d.count;
+			  d.count2 = +d.count2;
+});
+
+
+//Animation
+function tweenDash() {
+			var l = this.getTotalLength(),
+				i = d3.interpolateString("0," + l, l + "," + l);
+			return function (t) { return i(t); };
+		}
+function transition(selection) {
+		selection.each(function(){
+       d3.select(this).transition()
+			.duration(2000)
+			.attrTween("stroke-dasharray", tweenDash);
+      })
+	}
+
+ // Scale the range of the data
+x.domain(d3.extent(dataset, function(d) { return d.key; }));
+y.domain([0, d3.max(dataset, function(d) {
+		return Math.max(d.count, d.count2); })]);
+
+
+// Append the path, bind the data, and call the line generator 
+g2.append("path")
+    .datum(dataset) // Binds data to the line 
+    .attr("class", "line") // Assign a class for styling 
+    .attr("d", line); // Calls the line generator 
+	
+	
+g2.append("path")
+    .datum(dataset)  
+    .attr("class", "line2") 
+    .attr("d", line2);
+
+
+transition(d3.selectAll("path"))
+
+//Call the x axis in a group tag
+g2.append("g")
+    .attr("class", "x axis")
+    .attr("transform", "translate(0," + height2 + ")")
+    .call(d3.axisBottom(x)); // Create an axis component with d3.axisBottom
+
+//Call the y axis in a group tag
+g2.append("g")
+    .attr("class", "y axis")
+    .call(d3.axisLeft(y)); // Create an axis component with d3.axisLeft
+
+// Appends a circle for each datapoint 
+g2.selectAll(".dot")
+    .data(dataset)
+  .enter().append("circle") // Uses the enter().append() method
+    .attr("class", "dot") // Assign a class for styling
+    .attr("cx", function(d) { return x(d.key) })
+    .attr("cy", function(d) { return y(d.count) })
+    .attr("r", 2);
+
+g2.selectAll(".dot2")
+    .data(dataset)
+  .enter().append("circle") // Uses the enter().append() method
+    .attr("class", "dot2") // Assign a class for styling
+    .attr("cx", function(d) { return x(d.key) })
+    .attr("cy", function(d) { return y(d.count2) })
+    .attr("r", 2);
+	
+//////////////	
+}
+
+///////////////////////////////////////////////////////
+
+		
+		</script>
+        
+    </body>
+    
+</html

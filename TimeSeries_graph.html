@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+    <head>
+	  <style>
+	  p.indent{ padding-left: 3em }
+	  
+	  </style>
+<meta charset="utf-8">
+
+<style type="text/css">
+
+/* Style the lines by removing the fill and applying a stroke */
+	.line {
+		fill: none;
+		stroke: #ffab00;
+		stroke-width: 2;
+	}
+	
+	.line2 {
+		fill: none;
+		stroke: #0BE8F9;
+		stroke-width: 2;
+	}
+
+/* Style the dots by assigning a fill and stroke */
+	.dot {
+		fill: #FB8100 ;
+		stroke: #fff;
+	}
+	.dot2 {
+		fill: #0B79F9 ;
+		stroke: #fff;
+	}
+	.container {
+		float: right;	
+	}
+
+</style>
+	
+<body>
+	<h2> <p class="indent">Time(X) Vs Thread & Application count(Y)</p></h2>
+	
+</body>
+	<div class="container" id="chart1">
+		</div>
+<!-- Load in the d3 library -->
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<button id="bt1">Next</button>
+<script>
+	// 2. Use the margin convention practice 
+var margin = {top: 5, right: 50, bottom: 180, left: 80}
+  , width = window.innerWidth - margin.left - margin.right // Use the window's width 
+  , height = window.innerHeight - margin.top - margin.bottom; // Use the window's height
+				
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var index = 0
+var index_limit = 2000		
+function timestamp(timein){
+			var timestamp = (timein/1000000000).toFixed(0);
+			var months_arr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+			var date = new Date(timestamp*1000);
+			var year = date.getFullYear();
+			var month = months_arr[date.getMonth()];
+			var day = date.getDate();
+			var hours = date.getHours();
+			var minutes = "0" + date.getMinutes();
+			var seconds = "0" + date.getSeconds();
+			var convdataTime = month+'-'+day+'-'+year+' '+hours + ':' + minutes.substr(-2) + ':' + seconds.substr(-2);
+			//return convdataTime;
+			return convdataTime
+		}
+
+d3.json("https://raw.githubusercontent.com/CubeCode93/Dataviz_fall2019/master/cadets-benign-20180319195712.json", function(error, data) {	
+		if (error) throw error;
+			
+			var sliceData = data.slice(index, index+index_limit);
+			
+			//Change to time stamp
+			for (var n=0;n<sliceData.length;n++){
+				sliceData[n].time = timestamp(sliceData[n].time)
+			}
+			
+			//Group Time sets
+			var Time = d3.nest()
+				.key(function(d) { return d.time; })
+				.rollup(function(v) { return v.length; })
+				.entries(sliceData);
+			//console.log(Time)
+			for (var i=0;i<Time.length;i++){	
+				var dataset=[]
+	
+				for (var x=0;x<sliceData.length;x++){
+					if (sliceData[x].time == Time[i].key){
+						dataset.push(sliceData[x].exec)
+					}
+				}	
+				//console.log(dataset)
+				var exec = d3.nest()
+				.key(function(d) { return d; })
+				.rollup(function(v) { return v.length; })
+				.entries(dataset);
+				
+				////////
+				var exec_clean = exec.filter(function (d) {
+				return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+				});
+				
+				var tid_count=0
+				for (var o=0;o<exec_clean.length;o++){
+					var dataset2=[]
+				  for (var j=0;j<sliceData.length;j++){
+					if (sliceData[j].exec == exec_clean[o].key){
+						dataset2.push(sliceData[j].ppid)
+						}
+					}
+					var ppid = d3.nest()
+						.key(function(d) { return d; })
+						.rollup(function(v) { return v.length; })
+						.entries(dataset2);
+						
+					var ppid_clean = ppid.filter(function (d) {
+						return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+						});
+						console.log(ppid_clean)
+					for (var a=0;a<ppid_clean.length;a++){
+						var dataset3=[]
+						for (var b=0;b<sliceData.length;b++){
+							if ((sliceData[b].ppid == ppid_clean[a].key)&&(sliceData[b].exec == exec_clean[o].key)){
+								dataset3.push(sliceData[b].tid)
+							}
+						}
+						var tid = d3.nest()
+								.key(function(d) { return d; })
+								.rollup(function(v) { return v.length; })
+								.entries(dataset3);
+								
+							var tid_clean = tid.filter(function (d) {
+								return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+								});
+								
+							tid_count=tid_count+tid_clean.length
+					}
+				}
+				
+				///
+				//console.log(exec_count.length)
+				
+				Time[i].count = exec_clean.length
+				Time[i].count2 = tid_count
+
+			}
+			//console.log(Time)
+			InitLineplot(Time);
+			
+			svg.append('text')
+				.attr('class', 'source')
+				.attr('x',width - 950)
+				.attr('y',height + 50 ) 
+				.attr('text-anchor', 'start')
+				.text('Time Frame : '+sliceData[0].time+" to "+sliceData[sliceData.length-1].time)
+				
+			svg.append('text')
+				.attr('class', 'legend1')
+				.attr('x',width - 800)
+				.attr('y',height - 530 ) 
+				.attr('text-anchor', 'start')
+				.style('fill', '#ffab00')
+				.text('Number of Running Applications (Exec) ----')
+				
+			svg.append('text')
+				.attr('class', 'legend2')
+				.attr('x',width - 1000)
+				.attr('y',height - 530 ) 
+				.attr('text-anchor', 'start')
+				.style('fill', '#0BE8F9')
+				.text('Number of Threads ----')
+			
+			
+			d3.select("#bt1").on("click", () => {
+			
+			index += index_limit;
+			var sliceData = data.slice(index, index+index_limit);	
+		
+			d3.selectAll(".dot").remove();
+			d3.selectAll(".dot2").remove();
+			d3.selectAll("path").remove();
+			d3.selectAll('.axis').remove();
+			d3.selectAll('text').remove();
+			
+			/////////////
+			//Change to time stamp
+			for (var n=0;n<sliceData.length;n++){
+				sliceData[n].time = timestamp(sliceData[n].time)
+			}
+			
+			//Group Time sets
+			var Time = d3.nest()
+				.key(function(d) { return d.time; })
+				.rollup(function(v) { return v.length; })
+				.entries(sliceData);
+			//console.log(Time)
+			for (var i=0;i<Time.length;i++){	
+				var dataset=[]
+				
+				for (var x=0;x<sliceData.length;x++){
+					if (sliceData[x].time == Time[i].key){
+						dataset.push(sliceData[x].exec)
+					}
+				}	
+				//console.log(dataset)
+				var exec = d3.nest()
+				.key(function(d) { return d; })
+				.rollup(function(v) { return v.length; })
+				.entries(dataset);
+				
+				///
+				////////
+				var exec_clean = exec.filter(function (d) {
+					return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+					});
+				
+				var tid_count=0
+				for (var o=0;o<exec_clean.length;o++){
+					var dataset2=[]
+				  for (var j=0;j<sliceData.length;j++){
+					if (sliceData[j].exec == exec_clean[o].key){
+						dataset2.push(sliceData[j].ppid)
+						}
+					}
+					var ppid = d3.nest()
+						.key(function(d) { return d; })
+						.rollup(function(v) { return v.length; })
+						.entries(dataset2);
+						
+					var ppid_clean = ppid.filter(function (d) {
+						return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+						});
+						console.log(ppid_clean)
+					for (var a=0;a<ppid_clean.length;a++){
+						var dataset3=[]
+						for (var b=0;b<sliceData.length;b++){
+							if ((sliceData[b].ppid == ppid_clean[a].key)&&(sliceData[b].exec == exec_clean[o].key)){
+								dataset3.push(sliceData[b].tid)
+							}
+						}
+						var tid = d3.nest()
+								.key(function(d) { return d; })
+								.rollup(function(v) { return v.length; })
+								.entries(dataset3);
+								
+							var tid_clean = tid.filter(function (d) {
+								return ((d.key != "undefined") && (d.key!= "") && (d.key!="<unknown>"));
+								});
+								
+							tid_count=tid_count+tid_clean.length
+					}
+				}
+				
+				///
+				//
+				
+				
+				Time[i].count = exec_clean.length
+				Time[i].count2 = tid_count
+
+			}
+			//console.log(Time)
+			InitLineplot(Time);
+			////
+			svg.append('text')
+				.attr('class', 'source')
+				.attr('x',width - 950)
+				.attr('y',height + 50 ) 
+				.attr('text-anchor', 'start')
+				.text('Time Frame : '+sliceData[0].time+" to "+sliceData[sliceData.length-1].time)
+				
+			svg.append('text')
+				.attr('class', 'legend1')
+				.attr('x',width - 800)
+				.attr('y',height - 530 ) 
+				.attr('text-anchor', 'start')
+				.style('fill', '#ffab00')
+				.text('Number of Running Applications (Exec) ----')
+				
+			svg.append('text')
+				.attr('class', 'legend2')
+				.attr('x',width - 1000)
+				.attr('y',height - 530 ) 
+				.attr('text-anchor', 'start')
+				.style('fill', '#0BE8F9')
+				.text('Number of Threads ----')
+			
+			});
+		});
+		
+function InitLineplot(dataset){
+
+var parseTime = d3.timeParse("%b-%d-%Y %H:%M:%S");
+
+var x = d3.scaleTime().range([0, width]);
+var y = d3.scaleLinear().range([height, 0]);
+
+var line = d3.line()
+    .x(function(d) { return x(d.key); }) // set the x values for the line generator
+    .y(function(d) { return y(d.count); }) // set the y values for the line generator 
+    .curve(d3.curveMonotoneX) // apply smoothing to the line
+	
+////
+var line2 = d3.line()
+    .x(function(d) { return x(d.key); }) // set the x values for the line generator
+    .y(function(d) { return y(d.count2); }) // set the y values for the line generator 
+    .curve(d3.curveMonotoneX) // apply smoothing to the line	
+/////////	
+
+
+
+dataset.forEach(function(d) {
+			  d.key = parseTime(d.key);
+			  d.count = +d.count;
+			  d.count2 = +d.count2;
+});
+
+
+//Animation
+function tweenDash() {
+			var l = this.getTotalLength(),
+				i = d3.interpolateString("0," + l, l + "," + l);
+			return function (t) { return i(t); };
+		}
+function transition(selection) {
+		selection.each(function(){
+       d3.select(this).transition()
+			.duration(2000)
+			.attrTween("stroke-dasharray", tweenDash);
+      })
+	}
+
+ // Scale the range of the data
+x.domain(d3.extent(dataset, function(d) { return d.key; }));
+y.domain([0, d3.max(dataset, function(d) {
+		return Math.max(d.count, d.count2); })]);
+
+
+// Append the path, bind the data, and call the line generator 
+svg.append("path")
+    .datum(dataset) // Binds data to the line 
+    .attr("class", "line") // Assign a class for styling 
+    .attr("d", line); // Calls the line generator 
+	
+svg.append("path")
+    .datum(dataset)  
+    .attr("class", "line2") 
+    .attr("d", line2);
+
+
+transition(d3.selectAll("path"))
+
+//Call the x axis in a group tag
+svg.append("g")
+    .attr("class", "x axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(d3.axisBottom(x)); // Create an axis component with d3.axisBottom
+
+//Call the y axis in a group tag
+svg.append("g")
+    .attr("class", "y axis")
+    .call(d3.axisLeft(y)); // Create an axis component with d3.axisLeft
+
+
+
+// Appends a circle for each datapoint 
+svg.selectAll(".dot")
+    .data(dataset)
+  .enter().append("circle") // Uses the enter().append() method
+    .attr("class", "dot") // Assign a class for styling
+    .attr("cx", function(d) { return x(d.key) })
+    .attr("cy", function(d) { return y(d.count) })
+    .attr("r", 2);
+
+/////////	
+svg.selectAll(".dot2")
+    .data(dataset)
+  .enter().append("circle") // Uses the enter().append() method
+    .attr("class", "dot2") // Assign a class for styling
+    .attr("cx", function(d) { return x(d.key) })
+    .attr("cy", function(d) { return y(d.count2) })
+    .attr("r", 2);
+//////////////	
+}
+
+//Source courtesy:https://bl.ocks.org/pstuffa/26363646c478b2028d36e7274cedefa6
+</script>
